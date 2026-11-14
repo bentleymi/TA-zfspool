@@ -1,0 +1,55 @@
+TA-zfspool
+====
+
+Collects storage-pool integrity from whatever is present: ZFS (zpool status/get), Linux md RAID (/proc/mdstat + mdadm --detail) and btrfs (filesystem usage + device stats). Emits per-pool state (degraded, sync/rescan progress, reserved space, uncorrectable errors) as JSON events to index=main (sourcetype zfspool:status) and numeric zfspool.* metrics to index=metrics (sourcetype zfspool:metrics), with overview and metrics dashboards.
+
+Prerequisites
+-------------
+  * At least one of: zfs-utils, mdadm, btrfs-progs (the collector auto-detects and skips absent subsystems)
+  * Splunk Enterprise or Universal Forwarder 9.x - 10.6 (forwarder recommended
+    on monitored hosts).
+  * A metrics-typed index (default name: metrics) on the indexer:
+
+      [metrics]
+      datatype = metric
+
+    Forwarders only need that index to exist on the indexer side.
+  * No network egress, no root requirement beyond the Splunk service account.
+    Fully standalone add-on with no dependencies.
+
+Install
+-------
+Install on each monitored host (Apps > Install app from file, splunk install
+app, or deployment server), restart Splunk, then verify:
+
+  index=main sourcetype="zfspool:status" | head
+
+Search quick reference
+----------------------
+  index=main sourcetype="zfspool:status" | head
+  | mcatalog values(metric_name) where index=metrics metric_name="zfspool.*" by host
+  | mstats avg("zfspool.*") where index=metrics span=60s by host
+
+Usage
+-----
+Events: index=main sourcetype=zfspool:status  (per-pool JSON: subsystem, state, degraded flag,
+recovery %, vdev counts; alarm status when any pool is degraded/off)
+Metrics: zfspool.<subsystem>_<pool>_<attribute> on index=metrics
+Dashboards: TA-Zfspool > Zfspool Overview / Zfspool Metrics
+
+Configure
+---------
+Override the interval or destination index in etc/apps/TA-zfspool/local/inputs.conf
+(never edit default/).
+
+Troubleshooting
+---------------
+  * A healthy host with no pools still emits an 'absent' status event so reporting is visible.
+  * md details require mdadm to be installed; without it only /proc/mdstat is parsed.
+  * zpool scrub/rescan progress is only non-zero while a scrub is running.
+
+License
+-------
+SOURCE-AVAILABLE (see LICENSE) - free personal, educational and evaluation
+use; commercial or production use requires a paid license from BentleyPC
+LLC (https://www.bentleypc.com).

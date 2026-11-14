@@ -1,0 +1,47 @@
+<dashboard version="1.1" theme="light">
+  <label>TA-zfspool Overview</label>
+  <description>Collects storage-pool integrity from whatever is present: ZFS (zpool status/get), Linux md RAID (/proc/mdstat + mdadm --detail) and btrfs (filesystem usage + device stats). Emits</description>
+  <row>
+    <panel>
+      <title>Hosts Reporting (latest)</title>
+      <table>
+        <search>
+          <query>index=main sourcetype="zfspool:status"
+| stats latest(_time) as "Last seen", count as Reports by host
+| table host "Last seen" Reports</query>
+          <done/>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Distinct zfspool.* Metrics (last hour)</title>
+      <single>
+        <search>
+          <query>| mcatalog values(metric_name) as m where index=metrics metric_name="zfspool.*"
+| eval count=mvcount(m)</query>
+          <done/>
+        </search>
+        <option name="underLabel">zfspool.* metrics streaming</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Issues (newest first)</title>
+      <table>
+        <search>
+          <query>index=main sourcetype="zfspool:status" _raw="*alarm*"
+| sort - _time
+| table _time host _raw
+| rename _raw as Event
+| head 200</query>
+          <done/>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>
