@@ -7,7 +7,6 @@
       <chart>
         <search>
           <query>| mstats avg("zfspool.*") as "v*" where index=metrics by metric_name span=5m
-| 1=1
 | foreach v* [eval Value=coalesce(Value,&lt;&lt;FIELD&gt;&gt;)]
 | fields - v*
 | xyseries _time metric_name Value</query>
@@ -55,7 +54,7 @@
       <chart>
         <search>
           <query>| mstats avg("zfspool.*") as "v*" where index=metrics by metric_name span=5m
-| search metric_name IN ("*reserved_pct*","*free_pct*")
+| search metric_name IN ("used_pct","scrub_pct")
 | foreach v* [eval Value=coalesce(Value,&lt;&lt;FIELD&gt;&gt;)]
 | fields - v*
 | xyseries _time metric_name Value</query>
