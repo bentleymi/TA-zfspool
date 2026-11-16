@@ -3,43 +3,100 @@
   <description>Collects storage-pool integrity from whatever is present: ZFS (zpool status/get), Linux md RAID (/proc/mdstat + mdadm --detail) and btrfs (filesystem usage + device stats). Emits</description>
   <row>
     <panel>
-      <title>Hosts Reporting (latest)</title>
+      <title>Pools (per host, latest)</title>
+      <single>
+        <search>
+          <query>| mstats avg("zfspool.pools_total") as value where index=metrics span=5m
+| fields - _time | tail 1</query>
+          <done/>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Downgraded MD arrays (fleet, latest)</title>
+      <single>
+        <search>
+          <query>index=main sourcetype="zfspool:status"
+| eventstats latest(_time) as lt by host
+| dedup host lt
+| rex field=_raw max_match=0 "\"degraded\":\s*(?&lt;d&gt;[01])"
+| mvexpand d
+| where d="1"
+| stats count(d) as value</query>
+          <done/>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Storage subsystems present (per host)</title>
+      <single>
+        <search>
+          <query>| mstats avg("zfspool.subsystems") as value where index=metrics span=5m
+| fields - _time | tail 1</query>
+          <done/>
+        </search>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>MD arrays - latest per host</title>
       <table>
         <search>
           <query>index=main sourcetype="zfspool:status"
-| stats latest(_time) as "Last seen", count as Reports by host
-| table host "Last seen" Reports</query>
+| dedup host
+| rex field=_raw max_match=0 "\"(?&lt;k&gt;[^\"]+)\":\s*(?&lt;o&gt;\{[^{}]*\})"
+| where match(o,"\"level\"")
+| eval z=mvzip(k,o,"^^")
+| mvexpand z
+| rex field=z "^(?&lt;k&gt;[^^]+)\^\^(?&lt;o&gt;.+)$"
+| spath input=o path=level | spath input=o path=state | spath input=o path=active_disks | spath input=o path=required_disks | spath input=o path=degraded | spath input=o path=recovery_pct | spath input=o path=failed_devices | spath input=o path=spare_devices
+| table host k level state active_disks required_disks degraded recovery_pct failed_devices spare_devices</query>
           <done/>
         </search>
+        <option name="count">100</option>
         <option name="drilldown">none</option>
       </table>
     </panel>
   </row>
   <row>
     <panel>
-      <title>Distinct zfspool.* Metrics (last hour)</title>
-      <single>
+      <title>ZFS pools - latest per host</title>
+      <table>
         <search>
-          <query>| mcatalog values(metric_name) as m where index=metrics metric_name="zfspool.*"
-| eval count=mvcount(m)</query>
+          <query>index=main sourcetype="zfspool:status"
+| dedup host
+| rex field=_raw max_match=0 "\"(?&lt;k&gt;[^\"]+)\":\s*(?&lt;o&gt;\{[^{}]*\})"
+| where match(o,"\"state_ok\"")
+| eval z=mvzip(k,o,"^^")
+| mvexpand z
+| rex field=z "^(?&lt;k&gt;[^^]+)\^\^(?&lt;o&gt;.+)$"
+| spath input=o path=state | spath input=o path=state_ok | spath input=o path=failed_vdevs | spath input=o path=scrub_pct
+| table host k state state_ok failed_vdevs scrub_pct</query>
           <done/>
         </search>
-        <option name="underLabel">zfspool.* metrics streaming</option>
-      </single>
+        <option name="count">100</option>
+        <option name="drilldown">none</option>
+      </table>
     </panel>
   </row>
   <row>
     <panel>
-      <title>Issues (newest first)</title>
+      <title>Btrfs devices - latest per host</title>
       <table>
         <search>
-          <query>index=main sourcetype="zfspool:status" _raw="*alarm*"
-| sort - _time
-| table _time host _raw
-| rename _raw as Event
-| head 200</query>
+          <query>index=main sourcetype="zfspool:status"
+| dedup host
+| rex field=_raw max_match=0 "\"(?&lt;k&gt;[^\"]+)\":\s*(?&lt;o&gt;\{[^{}]*\})"
+| where match(o,"\"uncorrectable\"")
+| eval z=mvzip(k,o,"^^")
+| mvexpand z
+| rex field=z "^(?&lt;k&gt;[^^]+)\^\^(?&lt;o&gt;.+)$"
+| spath input=o path=uncorrectable | spath input=o path=corrupted
+| table host k uncorrectable corrupted</query>
           <done/>
         </search>
+        <option name="count">100</option>
         <option name="drilldown">none</option>
       </table>
     </panel>

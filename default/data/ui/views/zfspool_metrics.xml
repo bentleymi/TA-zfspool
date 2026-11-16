@@ -1,67 +1,77 @@
 <dashboard version="1.1" theme="light">
   <label>TA-zfspool Metrics</label>
-  <description>Index-time metrics over index=metrics (sourcetype=zfspool:metrics)</description>
+  <description> Index-time metrics over index=metrics (sourcetype zfspool:metrics); series prefixed 'zfspool.'.</description>
   <row>
     <panel>
-      <title>All zfspool.* series</title>
+      <title>All zfspool.* series (pools, subsystems, per-array counts)</title>
       <chart>
         <search>
           <query>| mstats avg("zfspool.*") as "v*" where index=metrics by metric_name span=5m
-| foreach v* [eval Value=coalesce(Value,&lt;&lt;FIELD&gt;&gt;)]
-| fields - v*
-| xyseries _time metric_name Value</query>
+| rename v* as "zfspool.*"</query>
           <done/>
         </search>
         <option name="charting.chart">line</option>
-        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.nullValueRendering">connect</option>
         <option name="charting.drilldown">none</option>
       </chart>
     </panel>
-      <panel>
-      <title>MD degraded / sync progress</title>
+  </row>
+  <row>
+    <panel>
+      <title>MD active disks (per array)</title>
       <chart>
         <search>
-          <query>| mstats avg("zfspool.*") as "v*" where index=metrics by metric_name span=5m
-| search metric_name IN ("*md_*degraded*","*md_*failed*","*md_*recovery_pct*")
-| foreach v* [eval Value=coalesce(Value,&lt;&lt;FIELD&gt;&gt;)]
-| fields - v*
-| xyseries _time metric_name Value</query>
+          <query>| mstats avg("zfspool.md_*_active_disks") as "v*" where index=metrics by metric_name span=5m
+| rename v* as "zfspool.md_*_active_disks"</query>
           <done/>
         </search>
         <option name="charting.chart">line</option>
-        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.nullValueRendering">connect</option>
         <option name="charting.drilldown">none</option>
       </chart>
     </panel>
-      <panel>
-      <title>btrfs uncorrectable / corrupted</title>
+  </row>
+  <row>
+    <panel>
+      <title>MD required disks (per array)</title>
       <chart>
         <search>
-          <query>| mstats avg("zfspool.*") as "v*" where index=metrics by metric_name span=5m
-| search metric_name IN ("*btrfs*uncorrectable*","*btrfs*corrupted*")
-| foreach v* [eval Value=coalesce(Value,&lt;&lt;FIELD&gt;&gt;)]
-| fields - v*
-| xyseries _time metric_name Value</query>
+          <query>| mstats avg("zfspool.md_*_required_disks") as "v*" where index=metrics by metric_name span=5m
+| rename v* as "zfspool.md_*_required_disks"</query>
           <done/>
         </search>
         <option name="charting.chart">line</option>
-        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.nullValueRendering">connect</option>
         <option name="charting.drilldown">none</option>
       </chart>
     </panel>
-      <panel>
-      <title>Space (reserved / free)</title>
+  </row>
+  <row>
+    <panel>
+      <title>MD degraded flag (per array)</title>
       <chart>
         <search>
-          <query>| mstats avg("zfspool.*") as "v*" where index=metrics by metric_name span=5m
-| search metric_name IN ("used_pct","scrub_pct")
-| foreach v* [eval Value=coalesce(Value,&lt;&lt;FIELD&gt;&gt;)]
-| fields - v*
-| xyseries _time metric_name Value</query>
+          <query>| mstats avg("zfspool.md_*_degraded") as "v*" where index=metrics by metric_name span=5m
+| rename v* as "zfspool.md_*_degraded"</query>
           <done/>
         </search>
         <option name="charting.chart">line</option>
-        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.nullValueRendering">connect</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>MD resync progress (% where running)</title>
+      <chart>
+        <search>
+          <query>| mstats avg("zfspool.md_*_recovery_pct") as "v*" where index=metrics by metric_name span=5m
+| rename v* as "zfspool.md_*_recovery_pct"</query>
+          <done/>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.nullValueRendering">connect</option>
         <option name="charting.drilldown">none</option>
       </chart>
     </panel>
