@@ -17,9 +17,70 @@ def read_file(path):
 def run(cmd, timeout=25):
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return p.stdout
     except (OSError, subprocess.TimeoutExpired):
         return ""
+    if p.returncode != 0:
+        return ""
+    return p.stdout
+
+
+def _size_bytes(value):
+    """Parse a btrfs-style size token like '4.73TiB' / '512.00MiB' into bytes."""
+    m = re.match(r"\s*([\d.]+)\s*([A-Za-z]*)", value or "")
+    if not m:
+        return None
+    try:
+        num = float(m.group(1))
+    except ValueError:
+        return None
+    mult = {
+        "": 1, "B": 1,
+        "K": 1000, "KB": 1000, "KIB": 1024,
+        "M": 1000 ** 2, "MB": 1000 ** 2, "MIB": 1024 ** 2,
+        "G": 1000 ** 3, "GB": 1000 ** 3, "GIB": 1024 ** 3,
+        "T": 1000 ** 4, "TB": 1000 ** 4, "TIB": 1024 ** 4,
+        "P": 1000 ** 5, "PB": 1000 ** 5, "PIB": 1024 ** 5,
+    }
+    return num * mult.get(m.group(2).upper(), 1)
+
+
+def _md_sysfs(name):
+    """Read md RAID state from /sys (readable without root, unlike mdadm --detail)."""
+    base = "/sys/block/%s/md" % name
+    res = {"degraded": None, "array_state": "", "failed_devices": 0,
+           "spare_devices": 0, "used_devices": 0}
+    dg = read_file(os.path.join(base, "degraded"))
+    if dg is not None and dg.strip().isdigit():
+        res["degraded"] = int(dg.strip())
+    ast = read_file(os.path.join(base, "array_state"))
+    if ast is not None:
+        res["array_state"] = ast.strip()
+    try:
+        entries = os.listdir(base)
+    except OSError:
+        return res
+    referenced = set()
+    for e in entries:
+        if re.match(r"^rd\d+$", e):
+            try:
+                referenced.add(os.path.basename(os.readlink(os.path.join(base, e))))
+            except OSError:
+                pass
+    failed = spare = used = 0
+    for e in entries:
+        if not e.startswith("dev-"):
+            continue
+        st = (read_file(os.path.join(base, e, "state")) or "").strip().lower()
+        if "faulty" in st:
+            failed += 1
+        elif e not in referenced:
+            spare += 1
+        else:
+            used += 1
+    res["failed_devices"] = failed
+    res["spare_devices"] = spare
+    res["used_devices"] = used
+    return res
 
 
 def collect_md():
@@ -33,7 +94,7 @@ def collect_md():
             if current:
                 if "blocks" in line:
                     pools[current]["blocks"] = line.strip()
-                elif "recovery" in line or "resync" in line:
+                elif "recovery" in line or "resync" in line or "check" in line:
                     pools[current]["resync"] = line.strip()
             continue
         m = re.match(r"^(\w+)\s*:\s*(\S+)?", line)
@@ -44,14 +105,14 @@ def collect_md():
             current = None
 
     out = {}
-    has_mdadm = os.path.exists("/usr/bin/mdadm") or os.path.exists("/usr/sbin/mdadm")
     for name, p in pools.items():
         first = p["line"]
         m = re.search(r"\[(\d+)/(\d+)\]", p["blocks"])
         required = active = None
         degraded = 0
         if m:
-            required, active = int(m.group(1)), int(m.group(2))
+            # /proc/mdstat "[active/total]": group(1)=working, group(2)=required.
+            active, required = int(m.group(1)), int(m.group(2))
             if required > active:
                 degraded = 1
         layout = re.search(r"\[([U_]+)\]", p["blocks"])
@@ -69,6 +130,11 @@ def collect_md():
         else:
             level = ""
         state = tokens[2] if len(tokens) >= 3 else "unknown"
+        sysf = _md_sysfs(name)
+        if sysf["degraded"]:
+            degraded = 1
+        if (state in ("", "unknown")) and sysf["array_state"]:
+            state = sysf["array_state"]
         rec = {
             "state": "inactive" if state == "stopped" else state,
             "level": level,
@@ -76,19 +142,10 @@ def collect_md():
             "required_disks": required,
             "active_disks": active,
             "recovery_pct": recovery_pct,
+            "failed_devices": sysf["failed_devices"],
+            "spare_devices": sysf["spare_devices"],
+            "used_devices": sysf["used_devices"],
         }
-        if has_mdadm:
-            detail = run(["mdadm", "--detail", "/dev/%s" % name])
-            for label, key in (
-                ("Failed Devices", "failed_devices"),
-                ("Spare Devices", "spare_devices"),
-                ("Used Devices", "used_devices"),
-            ):
-                dm = re.search(r"%s\s*:\s*(\d+)" % label, detail)
-                if dm:
-                    rec[key] = int(dm.group(1))
-            if rec.get("failed_devices") and not degraded:
-                rec["degraded"] = 1
         out[name] = rec
     return out
 
@@ -97,14 +154,14 @@ def collect_zfs():
     zpool = "/usr/sbin/zpool" if os.path.exists("/usr/sbin/zpool") else "/usr/bin/zpool"
     if not os.path.exists(zpool):
         return {}
-    listing = run([zpool, "list", "-H", "-o", "name,state,scan"])
+    listing = run([zpool, "list", "-H", "-o", "name,health"])
     out = {}
     for line in listing.splitlines():
         parts = line.split()
         if len(parts) >= 2:
             out[parts[0]] = {
                 "state": parts[1].lower(),
-                "state_ok": 1 if parts[1].lower() == "on" else 0,
+                "state_ok": 1 if parts[1].lower() == "online" else 0,
                 "failed_vdevs": 0,
                 "scrub_pct": None,
             }
@@ -141,23 +198,34 @@ def collect_btrfs():
     for line in mounts.splitlines():
         parts = line.split()
         if len(parts) >= 3 and parts[2] == "btrfs":
-            out[parts[0]] = {"uncorrectable": None, "corrupted": None}
+            out[parts[0]] = {"uncorrectable": 0, "corrupted": 0, "used_pct": None}
     for dev in sorted(out):
+        # device stats must be requested by device path; the mountpoint form
+        # fails (Operation not permitted) unless run as root.
         stats = run([btrfs, "device", "stats", dev])
-        mu = re.search(r"Uncorrectable errors:\s*(\d+)", stats)
-        mc = re.search(r"Corrupted metadata:\s*(\d+)", stats)
-        if mu:
-            out[dev]["uncorrectable"] = int(mu.group(1))
-        if mc:
-            out[dev]["corrupted"] = int(mc.group(1))
+        uncorrectable = 0
+        for mm in re.finditer(r"\.([A-Za-z_]+_io_errs)\s+(\d+)", stats):
+            uncorrectable += int(mm.group(2))
+        corrupted = 0
+        for mm in re.finditer(r"\.corruption_errs\s+(\d+)", stats):
+            if int(mm.group(1)) != 0:
+                corrupted += 1
+        out[dev]["uncorrectable"] = uncorrectable
+        out[dev]["corrupted"] = corrupted
+        mountpoint = None
         for mount_line in mounts.splitlines():
             parts = mount_line.split()
             if len(parts) >= 2 and parts[0] == dev:
-                usage = run([btrfs, "filesystem", "usage", parts[1]])
-                used = re.search(r"Used Data:\s*([\d.]+)", usage)
-                if used:
-                    out[dev]["used_pct"] = float(used.group(1).rstrip("%")) / 100.0
+                mountpoint = parts[1]
                 break
+        if mountpoint:
+            usage = run([btrfs, "filesystem", "usage", mountpoint])
+            dm = re.search(r"^\s*Device size:\s+([\d.]+\s*[A-Za-z]*)", usage, re.MULTILINE)
+            um = re.search(r"^\s*Used:\s+([\d.]+\s*[A-Za-z]*)", usage, re.MULTILINE)
+            total = _size_bytes(dm.group(1)) if dm else None
+            used = _size_bytes(um.group(1)) if um else None
+            if total and used is not None and total > 0:
+                out[dev]["used_pct"] = used / total
     return out
 
 

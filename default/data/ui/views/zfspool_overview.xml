@@ -3,7 +3,7 @@
   <description>Collects storage-pool integrity from whatever is present: ZFS (zpool status/get), Linux md RAID (/proc/mdstat + mdadm --detail) and btrfs (filesystem usage + device stats). Emits</description>
   <row>
     <panel>
-      <title>Pools (per host, latest)</title>
+      <title>Pools (fleet, latest)</title>
       <single>
         <search>
           <query>| mstats avg("zfspool.pools_total") as value where index=metrics span=5m
@@ -28,7 +28,7 @@
       </single>
     </panel>
     <panel>
-      <title>Storage subsystems present (per host)</title>
+      <title>Storage subsystems present (fleet, latest)</title>
       <single>
         <search>
           <query>| mstats avg("zfspool.subsystems") as value where index=metrics span=5m
@@ -46,10 +46,10 @@
           <query>index=main sourcetype="zfspool:status"
 | dedup host
 | rex field=_raw max_match=0 "\"(?&lt;k&gt;[^\"]+)\":\s*(?&lt;o&gt;\{[^{}]*\})"
-| where match(o,"\"level\"")
 | eval z=mvzip(k,o,"^^")
 | mvexpand z
 | rex field=z "^(?&lt;k&gt;[^^]+)\^\^(?&lt;o&gt;.+)$"
+| where match(o,"\"level\"")
 | spath input=o path=level | spath input=o path=state | spath input=o path=active_disks | spath input=o path=required_disks | spath input=o path=degraded | spath input=o path=recovery_pct | spath input=o path=failed_devices | spath input=o path=spare_devices
 | table host k level state active_disks required_disks degraded recovery_pct failed_devices spare_devices</query>
           <done/>
@@ -67,10 +67,10 @@
           <query>index=main sourcetype="zfspool:status"
 | dedup host
 | rex field=_raw max_match=0 "\"(?&lt;k&gt;[^\"]+)\":\s*(?&lt;o&gt;\{[^{}]*\})"
-| where match(o,"\"state_ok\"")
 | eval z=mvzip(k,o,"^^")
 | mvexpand z
 | rex field=z "^(?&lt;k&gt;[^^]+)\^\^(?&lt;o&gt;.+)$"
+| where match(o,"\"state_ok\"")
 | spath input=o path=state | spath input=o path=state_ok | spath input=o path=failed_vdevs | spath input=o path=scrub_pct
 | table host k state state_ok failed_vdevs scrub_pct</query>
           <done/>
@@ -88,10 +88,10 @@
           <query>index=main sourcetype="zfspool:status"
 | dedup host
 | rex field=_raw max_match=0 "\"(?&lt;k&gt;[^\"]+)\":\s*(?&lt;o&gt;\{[^{}]*\})"
-| where match(o,"\"uncorrectable\"")
 | eval z=mvzip(k,o,"^^")
 | mvexpand z
 | rex field=z "^(?&lt;k&gt;[^^]+)\^\^(?&lt;o&gt;.+)$"
+| where match(o,"\"uncorrectable\"")
 | spath input=o path=uncorrectable | spath input=o path=corrupted
 | table host k uncorrectable corrupted</query>
           <done/>

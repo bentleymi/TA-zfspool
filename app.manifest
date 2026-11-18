@@ -5,7 +5,7 @@
     "id": {
       "group": null,
       "name": "TA-zfspool",
-      "version": "1.0.1"
+      "version": "1.0.2"
     },
     "author": [{"name":"Michael \"JKat54\" Bentley","email":"michael@bentleypc.com","company":"BentleyPC LLC"}],
     "releaseDate": "11/16/2026",
