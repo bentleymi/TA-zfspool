@@ -2,6 +2,16 @@
   <label>TA-zfspool Overview</label>
   <description>Collects storage-pool integrity from whatever is present: ZFS (zpool status/get), Linux md RAID (/proc/mdstat + mdadm --detail) and btrfs (filesystem usage + device stats). Emits</description>
   <row>
+    <panel type="html">
+      <html><![CDATA[<div style="border:1px solid #cc7a00;background:#fff7ea;border-radius:6px;padding:10px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+<span style="font-weight:700;color:#b35c00">Commercial Use</span>
+<span>Commercial or production use of TA-zfspool requires a paid license. Evaluation, personal, and lab use is free. See the BentleyPC Commercial License for full terms.</span>
+<a href="https://bentleypc.com/TA-TA-zfspool/" target="_blank" rel="noopener" style="background:#cc7a00;color:#fff;padding:7px 16px;border-radius:5px;font-weight:700;text-decoration:none">Buy License</a>
+<a href="https://bentleypc.com/TA-TA-zfspool/LICENSE.html" target="_blank" rel="noopener" style="color:#b35c00;font-weight:600;text-decoration:underline">License &amp; Terms</a>
+</div>]]></html>
+    </panel>
+  </row>
+  <row>
     <panel>
       <title>Pools (fleet, latest)</title>
       <single>
