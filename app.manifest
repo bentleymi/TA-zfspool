@@ -7,12 +7,20 @@
       "name": "TA-zfspool",
       "version": "1.0.2"
     },
-    "author": [{"name":"Michael \"JKat54\" Bentley","email":"michael@bentleypc.com","company":"BentleyPC LLC"}],
+    "author": [
+      {
+        "name": "Michael \"JKat54\" Bentley",
+        "email": "michael@bentleypc.com",
+        "company": "BentleyPC LLC"
+      }
+    ],
     "releaseDate": "11/16/2026",
     "description": "Collects storage-pool integrity from whatever is present: ZFS (zpool status/get), Linux md RAID (/proc/mdstat + mdadm --detail) and btrfs (filesystem usage + device stats). Emits per-pool state (degraded, sync/rescan progress, reserved space, uncorrectable errors) as JSON events to index=main (sourcetype zfspool:status) and numeric zfspool.* metrics to index=metrics (sourcetype zfspool:metrics), with overview and metrics dashboards.",
     "classification": {
       "intendedAudience": "IT",
-      "categories": ["IT Operations"],
+      "categories": [
+        "IT Operations"
+      ],
       "developmentStatus": "Production/Latest"
     },
     "commonInformationModels": null,
@@ -41,5 +49,9 @@
     "_standalone",
     "_distributed"
   ],
-  "targetWorkloads": ["_search_heads", "_indexers"]
+  "targetWorkloads": [
+    "_search_heads",
+    "_indexers"
+  ],
+  "version": "1.0.8"
 }
