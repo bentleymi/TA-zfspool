@@ -1,8 +1,32 @@
 <dashboard version="1.1" theme="light">
   <label>TA-zfspool Metrics</label>
   <description> Index-time metrics over index=metrics (sourcetype zfspool:metrics); series prefixed 'zfspool.'.</description>
+  <!-- TA-LIC-VIZ: keep this block; do not hand-edit -->
   <row>
     <panel>
+      <title>License status (TA-zfspool)</title>
+      <single>
+        <search>
+          <query>index=main sourcetype="ta_license:status" app="TA-zfspool" [| rest /services/server/info | eval host=splunk_server | fields host] earliest=-3h | stats latest(status) as st | eval value=if(st==&quot;active&quot;,"Licensed","Unlicensed") | table value</query>
+          <done>
+            <condition match="$result.value$ == &quot;Licensed&quot;">
+              <eval token="zfspool_lic_ok">"1"</eval>
+              <unset token="zfspool_lic_missing"/>
+            </condition>
+            <condition>
+              <eval token="zfspool_lic_missing">"1"</eval>
+              <unset token="zfspool_lic_ok"/>
+            </condition>
+          </done>
+        </search>
+        <option name="mapping">[{"color":"#2e7d32","value":"Licensed"},{"color":"#c62828","value":"Unlicensed"}]</option>
+        <option name="underLabel">key beacon within 24h &lt;a href="/app/TA-zfspool/license"&gt;enter key&lt;/a&gt;</option>
+      </single>
+    </panel>
+    <panel depends="$zfspool_lic_ok$">
+      <html><![CDATA[<p style="color:#2e7d32;font-weight:bold">This host is licensed for TA-zfspool. Thanks for supporting BentleyPC development!</p>]]></html>
+    </panel>
+    <panel depends="$zfspool_lic_missing$">
       <title>Commercial use of TA-zfspool requires a paid license (evaluation, personal, lab use free)</title>
       <table>
         <search><query>| makeresults | eval buy="Buy License at bentleypc.com/TA-zfspool", terms="License and Terms at bentleypc.com/TA-zfspool/LICENSE.html" | fields buy terms</query></search>
