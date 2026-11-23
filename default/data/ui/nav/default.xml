@@ -3,5 +3,6 @@
     <view name="zfspool_overview" />
     <view name="zfspool_metrics" />
     <search label="TA-zfspool Events" search="search index=main sourcetype=zfspool:status" />
+    <view name="license" />
   </nav>
 </application>
